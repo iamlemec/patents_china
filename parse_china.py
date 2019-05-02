@@ -88,7 +88,7 @@ def add_patent(p):
     # output
     if pper > 0:
         if n % pper == 0:
-            print('pat = {n}')
+            print(f'pat = {n}')
             for k, v in p.items():
                 print(f'{k} = {v}')
             print()
@@ -103,7 +103,7 @@ def add_patent(p):
 # parse file
 n = 0
 pat = None
-for i, line in enumerate(open(args.path, encoding='gb2312', errors='ignore')):
+for i, line in enumerate(open(args.path, encoding='gb18030', errors='ignore')):
     # skip empty lines
     line = line.strip()
     if len(line) == 0:
