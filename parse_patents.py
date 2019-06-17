@@ -19,6 +19,9 @@ parser.add_argument('--limit', type=int, default=0, help='only parse n patents')
 parser.add_argument('--chunk', type=int, default=1000, help='chunk insert size')
 args = parser.parse_args()
 
+# announce
+print(args.path)
+
 # for later
 write = args.db is not None
 pper = args.output
