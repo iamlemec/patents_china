@@ -76,7 +76,7 @@ location = pd.read_csv('location_map.csv').set_index('from')['to'].to_dict()
 ## load data
 ##
 
-dtype = {'id': str, 'loccode': np.float}
+dtype = {'id': str}
 sconv = lambda s: int(s) if s.isdigit() else np.nan
 def load_year(fn, cols):
 	df = pd.read_csv(fn, dtype=dtype, usecols=cols).rename(cols, axis=1)
@@ -113,7 +113,7 @@ taxes1 = pd.concat([load_year(f'original/Taxation_Finance-{yr}.txt', cols_taxes1
 taxes = pd.concat([taxes0, taxes1], sort=True)
 
 # employee fix
-taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
+taxes['employees'] = taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
 taxes = taxes.drop(['employees_start', 'employees_end'], axis=1)
 
 ##
@@ -137,7 +137,7 @@ firms['sales'] = firms['sales_va'] + firms['sales_nova'] + firms['sales_exp']
 ## selections
 ##
 
-# firms = firms.dropna(subset=['loccode', 'industry', 'ee', 'sales', 'sales_net', 'income_main'])
-# firms = firms[firms['employees']>0]
-# for col in ['ee', 'sales_net', 'income_main', 'cost_oper', 'asset_start', 'asset_end']:
-# 	firms = firms[firms[col]>=0]
+firms1 = firms.dropna(subset=['loccode', 'industry', 'ee', 'sales', 'sales_net', 'income_main'])
+firms1 = firms1[firms1['employees']>0]
+for col in ['ee', 'sales_net', 'income_main', 'cost_oper', 'asset_start', 'asset_end']:
+	firms1 = firms1[firms1[col]>=0]
