@@ -128,11 +128,8 @@ taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
 print('merging datasets')
 
 index = ['firmid', 'year']
-firms = pd.concat([
-    basic.dropna(subset=index).set_index(index),
-    goods.dropna(subset=index).set_index(index),
-    taxes.dropna(subset=index).set_index(index)
-], axis=1).reset_index()
+conform = lambda df: df.dropna(subset=index).drop_duplicates(subset=index).set_index()
+firms = pd.concat([conform(df) for df in [basic, goods, taxes]], axis=1).reset_index()
 
 ##
 ## columns
