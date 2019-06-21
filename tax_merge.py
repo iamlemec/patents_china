@@ -69,8 +69,8 @@ cols_taxes1 = {
 	'UTF_N_9': 'asset_end'
 }
 
-industry = json.load(open('industry_map.json'))
-location = json.load(open('location_map.json'))
+industry = pd.read_csv('industry_map.csv').set_index('from')['to'].to_dict()
+location = pd.read_csv('location_map.csv').set_index('from')['to'].to_dict()
 
 ##
 ## load data
@@ -81,11 +81,9 @@ sconv = lambda s: int(s) if s.isdigit() else np.nan
 def load_year(fn, cols):
 	df = pd.read_csv(fn, dtype=dtype, usecols=cols).rename(cols, axis=1)
 	df['year'] = df['year'].apply(lambda s: s[:4]).apply(sconv)
-	df = df.dropna(subset=['firmid', 'year'])
-	df['year'] = df['year'].astype(np.int)
+	df['year'] = df['year'].astype('Int64')
 	if 'loccode' in df:
-		df = df.dropna(subset=['loccode'])
-		df['loccode'] = df['loccode'].astype(np.int).astype(str)
+		df['loccode'] = df['loccode'].astype('Int64')
 	return df
 
 # basic info
@@ -113,13 +111,15 @@ taxes = pd.concat([taxes0, taxes1], sort=True)
 basic['loccode'] = basic['loccode'].where(basic['year']>2011, basic['loccode'].replace(location))
 
 # industry fix
-ind0 = lambda s: s[1:] if type(s) is str else np.nan
-basic['industry_a'] = basic['industry_a'].apply(ind0)
-basic['industry_b'] = basic['industry_b'].apply(ind0)
+ind0 = lambda s: int(s[1:]) if type(s) is str else np.nan
+basic['industry_a'] = basic['industry_a'].apply(ind0).astype('Int64')
+basic['industry_b'] = basic['industry_b'].apply(ind0).astype('Int64')
 basic['industry'] = basic['industry_a'].fillna(basic['industry_b'].replace(industry))
+basic = basic.drop(['industry_a', 'industry_b'], axis=1)
 
 # employee fix
 taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
+taxes = taxes.drop(['employees_start', 'employees_end'], axis=1)
 
 ##
 ## merge
@@ -128,7 +128,7 @@ taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
 print('merging datasets')
 
 index = ['firmid', 'year']
-conform = lambda df: df.dropna(subset=index).drop_duplicates(subset=index).set_index()
+conform = lambda df: df.dropna(subset=index).drop_duplicates(subset=index).set_index(index)
 firms = pd.concat([conform(df) for df in [basic, goods, taxes]], axis=1).reset_index()
 
 ##
@@ -142,8 +142,7 @@ firms['sales'] = firms['sales_va'] + firms['sales_nova'] + firms['sales_exp']
 ## selections
 ##
 
-firms = firms[firms['loccode']!='0']
-firms = firms.dropna(subset=['ee', 'sales', 'sales_net', 'income_main'])
-firms = firms[firms['employees']>0]
-for col in ['ee', 'sales_net', 'income_main', 'cost_oper', 'asset_start', 'asset_end']:
-	firms = firms[firms[col]>=0]
+# firms = firms.dropna(subset=['loccode', 'industry', 'ee', 'sales', 'sales_net', 'income_main'])
+# firms = firms[firms['employees']>0]
+# for col in ['ee', 'sales_net', 'income_main', 'cost_oper', 'asset_start', 'asset_end']:
+# 	firms = firms[firms[col]>=0]
