@@ -133,11 +133,29 @@ firms = pd.concat([conform(df) for df in [basic, goods, taxes]], axis=1).reset_i
 # total sales
 firms['sales'] = firms['sales_va'] + firms['sales_nova'] + firms['sales_exp']
 
+# 2-digit industry
+firms['ind2'] = firms['industry'] // 100
+
 ##
 ## selections
 ##
 
+# critical columns
 firms1 = firms.dropna(subset=['loccode', 'industry', 'ee', 'sales', 'sales_net', 'income_main'])
+
+# exclude finance
+firms1 = firms1[~((firms1['ind2']>=66)&(firms1['ind2']<=69))]
+
+# positive size
 firms1 = firms1[firms1['employees']>0]
+
+# sane values
+firms1 = firms1[(firms1['ind2']>0)&(firms1['ind2']<90)]
 for col in ['ee', 'sales_net', 'income_main', 'cost_oper', 'asset_start', 'asset_end']:
 	firms1 = firms1[firms1[col]>=0]
+
+##
+## save to disk
+##
+
+firms1.to_csv('firms/taxes_merge.csv', index=False)
