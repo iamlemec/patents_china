@@ -48,6 +48,9 @@ cols_taxes0 = {
 	'UTF_L_1': 'income_oper',
 	'UTF_Q_13': 'employees',
 	'UTF_Q_14': 'output_value',
+	'UTF_Q_15': 'val_add',
+	'UTF_M_13': 'rnd',
+	'UTF_M_22': 'gov_sub',
 	'UTF_N_1': 'asset_start',
 	'UTF_N_9': 'asset_end'
 }
@@ -65,6 +68,9 @@ cols_taxes1 = {
 	'UTF_Q_11': 'employees_start',
 	'UTF_Q_12': 'employees_end',
 	'UTF_Q_14': 'output_value',
+	'UTF_Q_15': 'val_add',
+	'UTF_M_13': 'rnd',
+	'UTF_M_22': 'gov_sub',
 	'UTF_N_1': 'asset_start',
 	'UTF_N_9': 'asset_end'
 }
