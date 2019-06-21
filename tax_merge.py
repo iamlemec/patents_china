@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import pandas as pd
 from glob import glob
@@ -76,21 +77,26 @@ location = json.load(open('location_map.json'))
 ##
 
 dtype = {'id': str, 'loccode': np.float}
+sconv = lambda s: int(s) if s.isdigit() else np.nan
 def load_year(fn, cols):
-	return pd.read_csv(fn, dtype=dtype, usecols=cols).rename(cols, axis=1)
+	df = pd.read_csv(fn, dtype=dtype, usecols=cols).rename(cols, axis=1)
+	df['year'] = df['year'].apply(lambda s: s[:4]).apply(sconv)
+	df = df.dropna(subset=['firmid', 'year'])
+	df['year'] = df['year'].astype(np.int)
+	if 'loccode' in df:
+		df = df.dropna(subset=['loccode'])
+		df['loccode'] = df['loccode'].astype(np.int).astype(str)
+	return df
 
 # basic info
 print('loading basic info')
 basic0 = pd.concat([load_year(f'original/Basic_Information-{yr}.txt', cols_basic0) for yr in [2007, 2008, 2009, 2010]], sort=True)
 basic1 = pd.concat([load_year(f'original/Basic_Information-{yr}.txt', cols_basic1) for yr in [2011, 2012, 2013, 2014, 2015]], sort=True)
 basic = pd.concat([basic0, basic1], sort=True)
-basic['year'] = basic['year'].apply(lambda s: s[:4]).astype(np.int, errors='ignore')
-basic['loccode'] = basic['loccode'].fillna(0).astype(np.int).astype(str) # BAD
 
 # goods info
 print('loading goods and services info')
 goods = pd.concat([load_year(f'original/Goods_Service-{yr}.txt', cols_goods) for yr in [2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015]], sort=True)
-goods['year'] = goods['year'].apply(lambda s: s[:4]).astype(np.int, errors='ignore')
 goods = goods[goods['code']==0]
 
 # tax info
@@ -98,7 +104,6 @@ print('loading tax and finance info')
 taxes0 = pd.concat([load_year(f'original/Taxation_Finance-{yr}.txt', cols_taxes0) for yr in [2007, 2008, 2009]], sort=True)
 taxes1 = pd.concat([load_year(f'original/Taxation_Finance-{yr}.txt', cols_taxes1) for yr in [2010, 2011, 2012, 2013, 2014, 2015]], sort=True)
 taxes = pd.concat([taxes0, taxes1], sort=True)
-taxes['year'] = taxes['year'].apply(lambda s: s[:4]).astype(np.int, errors='ignore')
 
 ##
 ## fixes
@@ -140,8 +145,8 @@ firms['sales'] = firms['sales_va'] + firms['sales_nova'] + firms['sales_exp']
 ## selections
 ##
 
-# firms = firms[firms['loccode']!='0']
-# firms = firms.dropna(subset=['ee', 'sales', 'sales_net', 'income_main'])
-# firms = firms[firms['employees']>0]
-# for col in ['ee', 'sales_net', 'income_main', 'cost_oper', 'asset_start', 'asset_end']:
-# 	firms = firms[firms[col]>=0]
+firms = firms[firms['loccode']!='0']
+firms = firms.dropna(subset=['ee', 'sales', 'sales_net', 'income_main'])
+firms = firms[firms['employees']>0]
+for col in ['ee', 'sales_net', 'income_main', 'cost_oper', 'asset_start', 'asset_end']:
+	firms = firms[firms[col]>=0]
