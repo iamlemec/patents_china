@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 from glob import glob
 
 cols_basic = {
@@ -1355,31 +1357,34 @@ location = {
 dtype = {'id': str, 'loccode': np.float}
 
 # basic info
-basic = pd.concat([pd.read_csv(fn, dtype=dtype) for fn in glob('original/Basic_Information-*.txt')], sort=True)
-basic = basic[cols_basic].rename(cols_basic, axis=1)
-basic['year'] = basic['year'].apply(lambda s: int(s[:4]))
+print('loading basic info')
+basic = pd.concat([pd.read_csv(fn, dtype=dtype)[cols_basic].rename(cols_basic, axis=1) for fn in glob('original/Basic_Information-*.txt')], sort=True)
+basic['year'] = basic['year'].apply(lambda s: s[:4]).astype(np.int, errors='ignore')
 basic['loccode'] = basic['loccode'].fillna(0).astype(np.int).astype(str) # BAD
+
+# goods info
+print('loading goods and services info')
+goods = pd.concat([pd.read_csv(fn, dtype=dtype)[cols_goods].rename(cols_goods, axis=1) for fn in glob('original/Goods_Service-*.txt')], sort=True)
+goods['year'] = goods['year'].apply(lambda s: s[:4]).astype(np.int, errors='ignore')
+goods = goods[goods['code']==0]
+
+# tax info
+print('loading tax and finance info')
+taxes = pd.concat([pd.read_csv(fn, dtype=dtype)[cols_taxes].rename(cols_taxes, axis=1) for fn in glob('original/Taxation_Finance-*.txt')], sort=True)
+taxes['year'] = taxes['year'].apply(lambda s: s[:4]).astype(np.int, errors='ignore')
+
+##
+## fixes
+##
+
+# location fix
 basic['loccode'] = basic['loccode'].where(basic['year']>2011, basic['loccode'].replace(location))
-basic = basic.set_index(['firmid', 'year'])
 
 # industry fix
 ind0 = lambda s: s[1:] if type(s) is str else np.nan
 basic['industry_a'] = basic['industry_a'].apply(ind0)
 basic['industry_b'] = basic['industry_b'].apply(ind0)
 basic['industry'] = basic['industry_a'].fillna(basic['industry_b'].replace(industry))
-
-# goods info
-goods = pd.concat([pd.read_csv(fn, dtype=dtype) for fn in glob('original/Goods_Service-*.txt')], sort=True)
-goods = goods[cols_goods].rename(cols_goods, axis=1)
-goods['year'] = goods['year'].apply(lambda s: int(s[:4]))
-goods = goods[goods['code']==0]
-goods = goods.set_index(['firmid', 'year'])
-
-# tax info
-taxes = pd.concat([pd.read_csv(fn, dtype=dtype) for fn in glob('original/Taxation_Finance-*.txt')], sort=True)
-taxes = taxes[cols_taxes].rename(cols_taxes, axis=1)
-taxes['year'] = taxes['year'].apply(lambda s: int(s[:4]))
-taxes = taxes.set_index(['firmid', 'year'])
 
 # employee fix
 taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
@@ -1388,7 +1393,14 @@ taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
 ## merge
 ##
 
-firms = pd.concat([basic, goods, taxes], axis=1).reset_index()
+print('merging datasets')
+
+index = ['firmid', 'year']
+firms = pd.concat([
+    basic.dropna(subset=index).set_index(index),
+    goods.dropna(subset=index).set_index(index),
+    taxes.dropna(subset=index).set_index(index)
+], axis=1).reset_index()
 
 ##
 ## columns
