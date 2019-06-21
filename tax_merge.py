@@ -95,7 +95,7 @@ basic = pd.concat([basic0, basic1], sort=True)
 basic['loccode'] = basic['loccode'].where(basic['year']>2011, basic['loccode'].replace(location))
 
 # industry fix
-ind0 = lambda s: int(s[1:]) if type(s) is str else np.nan
+ind0 = lambda s: int(s[1:]) if type(s) is str else ''
 basic['industry_a'] = basic['industry_a'].apply(ind0).apply(sconv).astype('Int64')
 basic['industry_b'] = basic['industry_b'].apply(ind0).apply(sconv).astype('Int64')
 basic['industry'] = basic['industry_a'].fillna(basic['industry_b'].replace(industry))
