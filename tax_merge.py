@@ -91,6 +91,16 @@ basic0 = pd.concat([load_year(f'original/Basic_Information-{yr}.txt', cols_basic
 basic1 = pd.concat([load_year(f'original/Basic_Information-{yr}.txt', cols_basic1) for yr in [2011, 2012, 2013, 2014, 2015]], sort=True)
 basic = pd.concat([basic0, basic1], sort=True)
 
+# location fix
+basic['loccode'] = basic['loccode'].where(basic['year']>2011, basic['loccode'].replace(location))
+
+# industry fix
+ind0 = lambda s: int(s[1:]) if type(s) is str else np.nan
+basic['industry_a'] = basic['industry_a'].apply(ind0).apply(sconv).astype('Int64')
+basic['industry_b'] = basic['industry_b'].apply(ind0).apply(sconv).astype('Int64')
+basic['industry'] = basic['industry_a'].fillna(basic['industry_b'].replace(industry))
+basic = basic.drop(['industry_a', 'industry_b'], axis=1)
+
 # goods info
 print('loading goods and services info')
 goods = pd.concat([load_year(f'original/Goods_Service-{yr}.txt', cols_goods) for yr in [2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015]], sort=True)
@@ -101,20 +111,6 @@ print('loading tax and finance info')
 taxes0 = pd.concat([load_year(f'original/Taxation_Finance-{yr}.txt', cols_taxes0) for yr in [2007, 2008, 2009]], sort=True)
 taxes1 = pd.concat([load_year(f'original/Taxation_Finance-{yr}.txt', cols_taxes1) for yr in [2010, 2011, 2012, 2013, 2014, 2015]], sort=True)
 taxes = pd.concat([taxes0, taxes1], sort=True)
-
-##
-## fixes
-##
-
-# location fix
-basic['loccode'] = basic['loccode'].where(basic['year']>2011, basic['loccode'].replace(location))
-
-# industry fix
-ind0 = lambda s: int(s[1:]) if type(s) is str else np.nan
-basic['industry_a'] = basic['industry_a'].apply(ind0).apply(sconv).astype('Int64')
-basic['industry_b'] = basic['industry_b'].apply(ind0).apply(sconv).astype('Int64')
-basic['industry'] = basic['industry_a'].fillna(basic['industry_b'].replace(industry))
-basic = basic.drop(['industry_a', 'industry_b'], axis=1)
 
 # employee fix
 taxes['employees'].fillna(0.5*(taxes['employees_start']+taxes['employees_end']))
