@@ -80,8 +80,7 @@ dtype = {'id': str, 'loccode': np.float}
 sconv = lambda s: int(s) if s.isdigit() else np.nan
 def load_year(fn, cols):
 	df = pd.read_csv(fn, dtype=dtype, usecols=cols).rename(cols, axis=1)
-	df['year'] = df['year'].apply(lambda s: s[:4]).apply(sconv)
-	df['year'] = df['year'].astype('Int64')
+	df['year'] = df['year'].apply(lambda s: s[:4]).apply(sconv).astype('Int64')
 	if 'loccode' in df:
 		df['loccode'] = df['loccode'].astype('Int64')
 	return df
@@ -112,8 +111,8 @@ basic['loccode'] = basic['loccode'].where(basic['year']>2011, basic['loccode'].r
 
 # industry fix
 ind0 = lambda s: int(s[1:]) if type(s) is str else np.nan
-basic['industry_a'] = basic['industry_a'].apply(ind0).astype('Int64')
-basic['industry_b'] = basic['industry_b'].apply(ind0).astype('Int64')
+basic['industry_a'] = basic['industry_a'].apply(ind0).apply(sconv).astype('Int64')
+basic['industry_b'] = basic['industry_b'].apply(ind0).apply(sconv).astype('Int64')
 basic['industry'] = basic['industry_a'].fillna(basic['industry_b'].replace(industry))
 basic = basic.drop(['industry_a', 'industry_b'], axis=1)
 
