@@ -5,31 +5,37 @@ import re
 import os
 import sys
 import argparse
-import sqlite3
-from copy import copy
-from collections import OrderedDict
+import pandas as pd
+from collections import defaultdict
+from itertools import islice
 
 # parse input arguments
 parser = argparse.ArgumentParser(description='China patent parser.')
-parser.add_argument('path', type=str, help='path of file to parse')
-parser.add_argument('--db', type=str, default=None, help='database file to store to')
+parser.add_argument('inpath', type=str, help='TRS file to parse')
+parser.add_argument('--outdir', type=str, default=None, help='directory to store to')
 parser.add_argument('--clobber', action='store_true', help='delete database and restart')
-parser.add_argument('--output', type=int, default=0, help='print out patents per')
-parser.add_argument('--limit', type=int, default=0, help='only parse n patents')
-parser.add_argument('--chunk', type=int, default=1000, help='chunk insert size')
+parser.add_argument('--output', action='store_true', help='print out patents per')
+parser.add_argument('--chunk', type=int, default=100_000, help='chunk size')
+parser.add_argument('--limit', type=int, default=None, help='only parse n patents')
 args = parser.parse_args()
 
 # announce
-print(args.path)
+if not args.clobber and os.path.exists(args.outpath):
+    print(f'Skipping: {args.inpath}')
+    sys.exit(0)
+else:
+    print(f'Parsing: {args.inpath}')
 
-# for later
-write = args.db is not None
-pper = args.output
-limit = args.limit
-chunk = args.chunk
+# construct output path
+if args.outdir is not None:
+    filename = os.path.basename(args.inpath)
+    basename, _ = os.path.splitext(filename)
+    outpath = os.path.join(args.outdir, f'{basename}.csv')
+else:
+    outpath = None
 
 # database schema
-schema = {
+trans = {
     'patnum': '公开（公告）号', # Patent number
     'pubdate': '公开（公告）日', # Publication date
     'appnum': '申请号', # Application number
@@ -50,100 +56,77 @@ schema = {
     'country': '申请国代码', # Application Country
     'type': '专利类型', # Type of Patent
     'source': '申请来源', # Source
-    'sipoclass': '范畴分类' # Classification by SIPO
+    'sipoclass': '范畴分类', # Classification by SIPO
 }
-rschema = {v: k for k, v in schema.items()}
-
-# default values
-default = OrderedDict([(k, None) for k in schema])
-
-# database setup
-if write:
-    con = sqlite3.connect(args.db)
-    cur = con.cursor()
-    if args.clobber:
-        cur.execute('drop table if exists patent')
-        cur.execute('drop index if exists idx_patnum')
-    sig = ', '.join([f'{k} text' for k in schema])
-    cur.execute(f'create table if not exists patent ({sig})')
-    cur.execute('create unique index if not exists idx_patnum on patent (patnum)')
-
-# storage
-pats = []
-cmd = 'insert or replace into patent values (%s)' % ','.join(['?' for _ in schema])
-def commit_patents():
-    cur.executemany(cmd, pats)
-    con.commit()
-    pats.clear()
-
-# chunking express
-n = 0
-def add_patent(p):
-    global n
-    n += 1
-
-    # storage
-    if write:
-        pats.append(list(p.values()))
-        if len(pats) >= chunk:
-            commit_patents()
-
-    # output
-    if pper > 0:
-        if n % pper == 0:
-            print(f'pat = {n}')
-            for k, v in p.items():
-                print(f'{k} = {v}')
-            print()
-
-    # break
-    if limit > 0:
-        if n >= limit:
-            return False
-
-    return True
+rtrans = {v: k for k, v in trans.items()}
 
 # parse file
-n = 0
-pat = None
-for i, line in enumerate(open(args.path, encoding='gb18030', errors='ignore')):
-    # skip empty lines
-    line = line.strip()
-    if len(line) == 0:
-        continue
+def patent_generator(fid):
+    pat = None
+    for line in fid:
+        # skip empty lines
+        line = line.strip()
+        if len(line) == 0:
+            continue
 
-    # start patent
-    if line == '<REC>':
-        # store current
-        if pat is not None:
-            if not add_patent(pat):
-                break
+        # start patent
+        if line == '<REC>':
+            # store current
+            if pat is not None:
+                yield pat
 
-        # set defaults
-        pat = copy(default)
+            # set defaults
+            pat = defaultdict(None)
 
-        # clear buffer
-        tag = None
-        buf = None
+            # clear buffer
+            tag = None
+            buf = None
 
-        continue
+            continue
 
-    # start tag
-    ret = re.match('<([^\x00-\x7F][^>]*)>=(.*)', line)
-    if ret:
-        # store old
-        if tag in rschema:
-            k = rschema[tag]
-            pat[k] = buf
+        # start tag
+        ret = re.match('<([^\x00-\x7F][^>]*)>=(.*)', line)
+        if ret:
+            # store old
+            if tag in rtrans:
+                k = rtrans[tag]
+                pat[k] = buf
 
-        # start new
-        tag, buf = ret.groups()
-    else:
-        # continue existing
-        buf += line
+            # start new
+            tag, buf = ret.groups()
+        else:
+            # continue existing
+            buf += line
 
-if write:
-    # close database
-    commit_patents()
-    cur.close()
-    con.close()
+# open and parse
+with open(args.inpath, encoding='gb18030', errors='ignore') as fid:
+    # initial state
+    tot = 0
+    gen = patent_generator(fid)
+
+    while True:
+        # get up to chunk
+        batch = islice(gen, args.chunk)
+        frame = pd.DataFrame(batch, dtype=str, columns=trans)
+
+        # break if empty
+        if len(frame) == 0:
+            break
+
+        # save to csv
+        if outpath is not None:
+            if tot == 0:
+                frame.to_csv(outpath, index=False, header=True)
+            else:
+                frame.to_csv(outpath, index=False, mode='a', header=False)
+
+        # update counter
+        tot += len(frame)
+
+        # output stats
+        if args.output:
+            print(f'tot = {tot}')
+
+        # break if limit
+        if args.limit is not None and tot >= args.limit:
+            break
