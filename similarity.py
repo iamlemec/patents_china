@@ -2,8 +2,21 @@
 
 import torch
 import pandas as pd
-from ziggy import TorchVectorIndex
+from ziggy import TextDatabase, TorchVectorIndex
+from ziggy.quant import Half
 from ziggy.utils import batch_indices
+
+# merge multiple text databases (assumes same qspec, ignores groups)
+def merge_databases(paths, output, model, qspec=Half, size=1024):
+    db = TextDatabase(embed=model, device='cpu', qspec=qspec, size=size)
+    for path in paths:
+        db1 = TextDatabase.load(path, embed=model, device='cpu')
+        labels, texts = list(db1.text.keys()), list(db1.text.values())
+        vectors = db1.index.values.data
+        db.index_text(labels, texts)
+        db.index_vecs(labels, vectors)
+        del db1
+    db.save(output)
 
 # demean and renormalize vectors
 def demean_inplace(x):
@@ -22,6 +35,7 @@ def merge_patents(
     path_vecs, # ziggy database
     path_meta, # metadata csv
     path_pats, # output csv
+    id_col='appnum', date_col='appdate'
 ):
     # load vector index
     print('Loading vector index')
@@ -29,13 +43,13 @@ def merge_patents(
 
     # load metadata csv
     print('Loading patent metadata')
-    meta = pd.read_csv(path_meta, usecols=['patnum', 'appdate'])
-    meta = meta.drop_duplicates('patnum').set_index('patnum')
-    meta['appdate'] = pd.to_datetime(meta['appdate'])
+    meta = pd.read_csv(path_meta, usecols=[id_col, date_col], dtype={date_col: 'str'})
+    meta = meta.drop_duplicates(id_col).set_index(id_col)
+    meta[date_col] = pd.to_datetime(meta[date_col], errors='coerce')
 
     # merge with index (due to dups)
-    pats = pd.DataFrame({'patnum': index.labels})
-    pats = pats.join(meta, on='patnum')
+    pats = pd.DataFrame({id_col: index.labels})
+    pats = pats.join(meta, on=id_col)
 
     # save ordered patent data
     pats.to_csv(path_pats, index=False)
@@ -113,6 +127,7 @@ def similarity_mean(
     print('Loading base vector index')
     index = load_database(path_vecs)
     n_pats = len(index)
+    print(f'Loaded {n_pats} vectors')
 
     # load comparison vector index
     if path_vecs1 is not None:
@@ -132,8 +147,10 @@ def similarity_mean(
         n_pats = min(n_pats, max_rows)
 
     # load merged patent data
+    print('Loading patent metadata')
     pats = pd.read_csv(path_pats)
-    pats['appdate'] = pd.to_datetime(pats['appdate'])
+    pats['appdate'] = pd.to_datetime(pats['appdate']).fillna(pd.Timestamp('1970-01-01'))
+    print(f'Loaded {len(pats)} metadata')
 
     # get application year for patents
     app_year = torch.tensor(pats['appdate'].dt.year, dtype=torch.int32, device='cuda')
@@ -154,7 +171,8 @@ def similarity_mean(
 
         # compute similarities for batch
         vecs = index.values.data[i1:i2] # [B, D]
-        sims = index1.similarity(vecs) # [B, N1]
+        # sims = index1.similarity(vecs) # [B, N1]
+        sims = (index1.values.data[:n_pats,:] @ vecs.T).T # [B, N1]
 
         # generate offsets
         batch_vec = torch.arange(n_batch, device='cuda')
